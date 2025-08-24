@@ -54,10 +54,9 @@ local function DestroyESP(character)
     end
 end
 
--- This is the main loop that runs every frame
+
 RunService.Heartbeat:Connect(function()
     if not Settings.ESP_Enabled then
-        -- If ESP is disabled, clean up everything for all players
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
                 DestroyESP(player.Character)
@@ -109,7 +108,7 @@ RunService.Heartbeat:Connect(function()
                         end
                     end
                 else
-                    DestroyESP(character) -- Destroy only chams if disabled, but other esp might be on
+                    DestroyESP(character) 
                 end
                 
                 -- Create/Update Username ESP
@@ -135,11 +134,11 @@ RunService.Heartbeat:Connect(function()
                 end
 
             else
-                -- Destroy if team check is on and they are on our team
+                
                 DestroyESP(character)
             end
         else
-            -- Destroy if the player is invalid (dead, local player, etc.)
+           
             DestroyESP(character)
         end
     end
