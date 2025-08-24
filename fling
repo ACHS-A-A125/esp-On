@@ -1,0 +1,82 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Debris = game:GetService("Debris")
+
+local loopingFling = false
+
+-- Ragdoll the local player
+local function RagdollSelf()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+    end
+end
+
+-- Stop ragdolling the local player
+local function UnRagdollSelf()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = false
+    end
+end
+
+-- Start the fling towards the target
+function StartFling(playerName)
+    local target = Players:FindFirstChild(playerName)
+    if not target or not target.Character then
+        warn("Target not found")
+        return
+    end
+
+    loopingFling = true
+    local myChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local myHRP = myChar:WaitForChild("HumanoidRootPart")
+    local targetHRP = target.Character:WaitForChild("HumanoidRootPart")
+
+    RagdollSelf() -- ragdoll before fling
+
+    -- Fling loop
+    spawn(function()
+        while loopingFling and target and target.Character and targetHRP do
+            local ping = LocalPlayer:GetNetworkPing()
+            local targetVelocity = targetHRP.AssemblyLinearVelocity or Vector3.new(0, 0, 0)
+            local predictedPosition = targetHRP.Position + (targetVelocity * ping)
+
+            -- teleport close under the predicted position
+            myHRP.CFrame = CFrame.new(predictedPosition) * CFrame.new(0, -1.5, 0)
+
+            local direction = (predictedPosition - myHRP.Position).Unit
+            local fling = Instance.new("BodyVelocity")
+            fling.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            fling.Velocity = direction * 500000
+            fling.Parent = myHRP
+
+            Debris:AddItem(fling, 0.1)
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- Stop the fling and reset forces
+function StopFling()
+    loopingFling = false
+
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BodyVelocity") or part:IsA("BodyForce") or part:IsA("BodyGyro") or part:IsA("LinearVelocity") or part:IsA("VectorForce") then
+                part:Destroy()
+            end
+        end
+    end
+
+    UnRagdollSelf()
+end
+
+-- Now you can just call:
+-- StartFling("TargetPlayerName")
+-- StopFling()
