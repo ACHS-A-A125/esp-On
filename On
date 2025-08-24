@@ -1,82 +1,39 @@
---[[
-    SCRIPT: ESP Functions Library (Highlight Method)
-
-    DESCRIPTION:
-    This script provides two functions, EnableESP() and DisableESP(),
-    to control the visual ESP elements. This version uses the modern
-    'Highlight' instance for better performance and reliability.
-    It does not activate on its own; you must call the functions.
-]]
-
---// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
---// Settings
 local Settings = {
     ESP_TeamCheck = false,
     Username_Enabled = true,
-
-    -- Highlight Settings
-    Fill_Color = Color3.fromRGB(0, 0, 255),  -- The main body color
-    Fill_Transparency = 0.7,                 -- The transparency of the body
-    Outline_Color = Color3.fromRGB(255, 0, 0), -- The color of the glowing outline
-    Outline_Transparency = 0.3,              -- The transparency of the outline
-
+    Fill_Color = Color3.fromRGB(0, 0, 255),
+    Fill_Transparency = 0.7,
+    Outline_Color = Color3.fromRGB(255, 0, 0),
+    Outline_Transparency = 0.3,
     Max_Distance = 300,
 }
 
---// Control Variable
 local heartbeatConnection = nil
 
--- =================================================================================
---  FUNCTION 1: DisableESP
---  Stops the ESP loop and cleans up all visual elements from every player.
--- =================================================================================
 function DisableESP()
-    -- If the heartbeat connection exists, disconnect it to stop the loop.
     if heartbeatConnection then
         heartbeatConnection:Disconnect()
         heartbeatConnection = nil
     end
-
-    -- Loop through every player and destroy their ESP elements.
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
-            -- Find and destroy the Highlight instance.
             local espHighlight = player.Character:FindFirstChild("ESPHighlight")
-            if espHighlight then
-                espHighlight:Destroy()
-            end
-
-            -- Find and destroy the username GUI.
+            if espHighlight then espHighlight:Destroy() end
             local head = player.Character:FindFirstChild("Head")
             if head then
                 local billboardGui = head:FindFirstChild("PlayerESP_GUI")
-                if billboardGui then
-                    billboardGui:Destroy()
-                end
+                if billboardGui then billboardGui:Destroy() end
             end
         end
     end
-
-    print("ESP Disabled and Cleaned Up.")
 end
 
-
--- =================================================================================
---  FUNCTION 2: EnableESP (Corrected with Highlight)
---  Starts the ESP loop that draws visuals on players every frame.
--- =================================================================================
 function EnableESP()
-    -- If the loop is already running, do nothing to prevent creating multiple loops.
-    if heartbeatConnection then
-        print("ESP is already enabled.")
-        return
-    end
-
-    -- Connect the main logic to the Heartbeat event, which runs every frame.
+    if heartbeatConnection then return end
     heartbeatConnection = RunService.Heartbeat:Connect(function()
         local localCharacter = LocalPlayer.Character
         if not localCharacter then return end
@@ -84,58 +41,50 @@ function EnableESP()
         if not localRoot then return end
 
         for _, player in ipairs(Players:GetPlayers()) do
-            pcall(function() -- Use a pcall to prevent one player's error from breaking the whole loop
+            pcall(function()
                 local character = player.Character
                 if not character then return end
-                
-                -- Cleanup previous ESP elements on the character to avoid clutter
-                local espHighlight = character:FindFirstChild("ESPHighlight")
-                local head = character:FindFirstChild("Head")
-                local billboardGui = head and head:FindFirstChild("PlayerESP_GUI")
-
-                -- Primary validation check
                 local humanoid = character:FindFirstChildOfClass("Humanoid")
                 local rootPart = character:FindFirstChild("HumanoidRootPart")
+                local head = character:FindFirstChild("Head")
+                local espHighlight = character:FindFirstChild("ESPHighlight")
+                local billboardGui = head and head:FindFirstChild("PlayerESP_GUI")
                 local isVisible = (player ~= LocalPlayer and humanoid and rootPart and humanoid.Health > 0)
                 local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
                 local distance = rootPart and (localRoot.Position - rootPart.Position).Magnitude or math.huge
 
-                -- Main logic: Should we draw ESP on this player?
                 if isVisible and not isTeamCheckActive and distance <= Settings.Max_Distance then
-                    -- Create/Update Highlight ESP (This shows through walls)
                     local highlight = espHighlight or Instance.new("Highlight", character)
                     highlight.Name = "ESPHighlight"
-                    
-                    -- CRITICAL: This property makes the highlight visible through walls.
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    
                     highlight.FillColor = Settings.Fill_Color
                     highlight.FillTransparency = Settings.Fill_Transparency
                     highlight.OutlineColor = Settings.Outline_Color
                     highlight.OutlineTransparency = Settings.Outline_Transparency
-                    
-                    -- Create/Update Username ESP
+
                     if Settings.Username_Enabled and head then
                         local gui = billboardGui or Instance.new("BillboardGui", head)
-                        gui.Name = "PlayerESP_GUI"; gui.AlwaysOnTop = true
+                        gui.Name = "PlayerESP_GUI"
+                        gui.AlwaysOnTop = true
                         gui.Size = UDim2.new(10, 0, 2, 0)
                         gui.StudsOffset = Vector3.new(0, 3, 0)
-
                         local textLabel = gui:FindFirstChild("NameLabel") or Instance.new("TextLabel", gui)
-                        textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
-                        textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
-                        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
-                        
+                        textLabel.Name = "NameLabel"
+                        textLabel.BackgroundTransparency = 1
+                        textLabel.Size = UDim2.new(1, 0, 1, 0)
+                        textLabel.Text = player.DisplayName
+                        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        textLabel.TextScaled = true
                         local textStroke = textLabel:FindFirstChild("TextStroke") or Instance.new("UIStroke", textLabel)
-                        textStroke.Name = "TextStroke"; textStroke.Thickness = 1.5; textStroke.Color = Color3.new(0,0,0)
+                        textStroke.Name = "TextStroke"
+                        textStroke.Thickness = 1.5
+                        textStroke.Color = Color3.new(0, 0, 0)
                     end
                 else
-                    -- If the player is invalid, out of range, or on our team, destroy their visuals.
                     if espHighlight then espHighlight:Destroy() end
                     if billboardGui then billboardGui:Destroy() end
                 end
             end)
         end
     end)
-    print("ESP Enabled.")
 end
