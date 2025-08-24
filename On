@@ -9,7 +9,7 @@ local Settings = {
     Fill_Transparency = 0.7,
     Outline_Color = Color3.fromRGB(255, 0, 0),
     Outline_Transparency = 0.3,
-    Max_Distance = 300,
+    Max_Distance = 300000,
 }
 
 local heartbeatConnection = nil
