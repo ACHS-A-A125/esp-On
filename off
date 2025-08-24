@@ -1,59 +1,46 @@
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local uis = game:GetService("UserInputService")
-
-local flying = false
+-- Ensure these are in the global scope so your GUI can call them
 _G.flySpeed = 50
-local bv
+_G.flying = false
+_G.bv = nil
 
--- Function to start flying
-local function startFly()
-    if flying then return end
-    flying = true
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
 
-    bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    bv.Velocity = Vector3.new(0,0,0)
-    bv.Parent = humanoidRootPart
+function startFly()
+    if _G.flying then return end
+    _G.flying = true
+    _G.bv = Instance.new("BodyVelocity")
+    _G.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    _G.bv.Velocity = Vector3.new(0,0,0)
+    _G.bv.Parent = hrp
 end
 
--- Function to stop flying
-local function stopFly()
-    if not flying then return end
-    flying = false
-    if bv then bv:Destroy() end
+function stopFly()
+    if not _G.flying then return end
+    _G.flying = false
+    if _G.bv then _G.bv:Destroy() end
 end
 
--- Toggle fly with F key
-uis.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.F then
-        if flying then
-            stopFly()
-        else
-            startFly()
-        end
-    end
-end)
+-- Update velocity every frame
+rs.RenderStepped:Connect(function()
+    if not _G.flying or not _G.bv then return end
 
--- Update velocity while flying
-game:GetService("RunService").RenderStepped:Connect(function()
-    if flying and bv then
-        local moveDir = Vector3.new(0,0,0)
-        local cam = workspace.CurrentCamera
+    local moveDir = Vector3.new(0,0,0)
+    local cam = workspace.CurrentCamera
 
-        if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
-        if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
-        if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
-        if uis:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-        if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
-        if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
+    if uis:IsKeyDown(Enum.KeyCode.W) then moveDir += cam.CFrame.LookVector end
+    if uis:IsKeyDown(Enum.KeyCode.S) then moveDir -= cam.CFrame.LookVector end
+    if uis:IsKeyDown(Enum.KeyCode.A) then moveDir -= cam.CFrame.RightVector end
+    if uis:IsKeyDown(Enum.KeyCode.D) then moveDir += cam.CFrame.RightVector end
+    if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0,1,0) end
+    if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir -= Vector3.new(0,1,0) end
 
-        if moveDir.Magnitude > 0 then
-            bv.Velocity = moveDir.Unit * _G.flySpeed
-        else
-            bv.Velocity = Vector3.new(0,0,0)
-        end
+    if moveDir.Magnitude > 0 then
+        _G.bv.Velocity = moveDir.Unit * _G.flySpeed
+    else
+        _G.bv.Velocity = Vector3.new(0,0,0)
     end
 end)
