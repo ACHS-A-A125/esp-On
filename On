@@ -1,145 +1,138 @@
 --[[
-    SCRIPT: ESP & Chams ON
+    SCRIPT: ESP Functions Library
 
-    FEATURES:
-    - Chams: Creates colored boxes around players.
-    - Glow: Adds an outer glow effect to the chams.
-    - Username ESP: Displays player usernames above their heads.
-    - Distance Scaling: Username and chams size scales down with distance.
+    DESCRIPTION:
+    This script provides two functions, EnableESP() and DisableESP(),
+    to control the visual ESP elements. It does not activate them on its own.
+    You must call these functions from another script or via a trigger.
 ]]
 
+--// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- /// SETTINGS \\\ --
+--// Settings
 local Settings = {
-    ESP_Enabled = true,
     ESP_TeamCheck = false,
     Chams_Enabled = true,
     Username_Enabled = true,
-
-    -- Visuals
     Chams_Color = Color3.fromRGB(0, 0, 255),
     Chams_Transparency = 0.9,
     Chams_Glow_Color = Color3.fromRGB(255, 0, 0),
     Glow_Transparency = 0.3,
-
-    -- Distance Scaling
     Max_Distance = 300,
-    Min_Size = 0.5, 
+    Min_Size = 0.5,
 }
 
+--// Control Variable
+-- This holds the active connection to the game's heartbeat (frame updates).
+-- It allows us to start and stop the ESP loop.
+local heartbeatConnection = nil
 
-local function DestroyESP(character)
-    if not character then return end
+-- =================================================================================
+--  FUNCTION 1: DisableESP
+--  Stops the ESP loop and cleans up all visual elements from every player.
+-- =================================================================================
+function DisableESP()
+    -- If the heartbeat connection exists, disconnect it to stop the loop.
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
 
-    
-    for _, part in ipairs(character:GetChildren()) do
-        if part:IsA("BasePart") then
-            local glow = part:FindFirstChild("Glow")
-            local chams = part:FindFirstChild("Chams")
-            if glow then glow:Destroy() end
-            if chams then chams:Destroy() end
+    -- Internal helper function to clean a single character.
+    local function cleanupCharacter(character)
+        if not character then return end
+        -- Use GetDescendants to reliably find all ESP parts.
+        for _, descendant in ipairs(character:GetDescendants()) do
+            if descendant.Name == "Glow" or descendant.Name == "Chams" or descendant.Name == "PlayerESP_GUI" then
+                descendant:Destroy()
+            end
         end
     end
 
-    
-    local head = character:FindFirstChild("Head")
-    if head then
-        local usernameGui = head:FindFirstChild("PlayerESP_GUI")
-        if usernameGui then
-            usernameGui:Destroy()
-        end
+    -- Loop through every player in the game and run the cleanup function.
+    for _, player in ipairs(Players:GetPlayers()) do
+        cleanupCharacter(player.Character)
     end
+
+    print("ESP Disabled and Cleaned Up.")
 end
 
 
-RunService.Heartbeat:Connect(function()
-    if not Settings.ESP_Enabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                DestroyESP(player.Character)
-            end
-        end
+-- =================================================================================
+--  FUNCTION 2: EnableESP
+--  Starts the ESP loop that draws visuals on players every frame.
+-- =================================================================================
+function EnableESP()
+    -- If the loop is already running, do nothing to prevent creating multiple loops.
+    if heartbeatConnection then
+        print("ESP is already enabled.")
         return
     end
 
-    local localCharacter = LocalPlayer.Character
-    if not localCharacter then return end
-    local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
-    if not localRoot then return end
+    -- Connect the main logic to the Heartbeat event, which runs every frame.
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        local localCharacter = LocalPlayer.Character
+        if not localCharacter then return end
+        local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+        if not localRoot then return end
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        local character = player.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        for _, player in ipairs(Players:GetPlayers()) do
+            local character = player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 
-        -- Check if the player is valid to apply ESP on
-        if player ~= LocalPlayer and character and humanoid and rootPart and humanoid.Health > 0 then
-            local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
-            
-            if not isTeamCheckActive then
-                -- Calculate distance for scaling
-                local distance = (localRoot.Position - rootPart.Position).Magnitude
-                local scale = math.clamp(1 - (distance / Settings.Max_Distance), Settings.Min_Size, 1)
+            -- Validate the target player.
+            if player ~= LocalPlayer and character and humanoid and rootPart and humanoid.Health > 0 then
+                local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
+                if not isTeamCheckActive then
+                    local distance = (localRoot.Position - rootPart.Position).Magnitude
 
-                -- Create/Update Chams
-                if Settings.Chams_Enabled then
-                    for _, part in ipairs(character:GetChildren()) do
-                        if part:IsA("BasePart") and part.Transparency < 1 then
-                            local chamsBox = part:FindFirstChild("Chams") or Instance.new("BoxHandleAdornment", part)
-                            chamsBox.Name = "Chams"
-                            chamsBox.AlwaysOnTop = true
-                            chamsBox.ZIndex = 4
-                            chamsBox.Adornee = part
-                            chamsBox.Color3 = Settings.Chams_Color
-                            chamsBox.Transparency = Settings.Chams_Transparency
-                            chamsBox.Size = (part.Size + Vector3.new(0.02, 0.02, 0.02)) * scale
+                    -- If the player is out of range, just destroy their visuals for now.
+                    if distance > Settings.Max_Distance then
+                        -- You can implement a more specific cleanup here if needed.
+                        -- For now, we'll let the main loop handle it.
+                    else
+                        local scale = math.clamp(1 - (distance / Settings.Max_Distance), Settings.Min_Size, 1)
 
-                            local glowBox = part:FindFirstChild("Glow") or Instance.new("BoxHandleAdornment", part)
-                            glowBox.Name = "Glow"
-                            glowBox.AlwaysOnTop = false
-                            glowBox.ZIndex = 3
-                            glowBox.Adornee = part
-                            glowBox.Color3 = Settings.Chams_Glow_Color
-                            glowBox.Transparency = Settings.Glow_Transparency
-                            glowBox.Size = (part.Size + Vector3.new(0.13, 0.13, 0.13)) * scale
+                        -- Create/Update Chams & Glow
+                        if Settings.Chams_Enabled then
+                            for _, part in ipairs(character:GetChildren()) do
+                                if part:IsA("BasePart") and part.Transparency < 1 then
+                                    local chamsBox = part:FindFirstChild("Chams") or Instance.new("BoxHandleAdornment", part)
+                                    chamsBox.Name = "Chams"; chamsBox.AlwaysOnTop = true; chamsBox.Adornee = part
+                                    chamsBox.Color3 = Settings.Chams_Color; chamsBox.Transparency = Settings.Chams_Transparency
+                                    chamsBox.Size = (part.Size + Vector3.new(0.02, 0.02, 0.02)) * scale
+
+                                    local glowBox = part:FindFirstChild("Glow") or Instance.new("BoxHandleAdornment", part)
+                                    glowBox.Name = "Glow"; glowBox.AlwaysOnTop = false; glowBox.Adornee = part
+                                    glowBox.Color3 = Settings.Chams_Glow_Color; glowBox.Transparency = Settings.Glow_Transparency
+                                    glowBox.Size = (part.Size + Vector3.new(0.13, 0.13, 0.13)) * scale
+                                end
+                            end
+                        end
+                        
+                        -- Create/Update Username ESP
+                        if Settings.Username_Enabled then
+                            local head = character:FindFirstChild("Head")
+                            if head then
+                                local billboardGui = head:FindFirstChild("PlayerESP_GUI") or Instance.new("BillboardGui", head)
+                                billboardGui.Name = "PlayerESP_GUI"; billboardGui.AlwaysOnTop = true
+                                billboardGui.Size = UDim2.new(scale * 4, 0, scale * 1, 0); billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+
+                                local textLabel = billboardGui:FindFirstChild("NameLabel") or Instance.new("TextLabel", billboardGui)
+                                textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
+                                textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
+                                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
+                            end
                         end
                     end
-                else
-                    DestroyESP(character) 
                 end
-                
-                -- Create/Update Username ESP
-                if Settings.Username_Enabled then
-                    local head = character:FindFirstChild("Head")
-                    if head then
-                        local billboardGui = head:FindFirstChild("PlayerESP_GUI") or Instance.new("BillboardGui", head)
-                        billboardGui.Name = "PlayerESP_GUI"
-                        billboardGui.AlwaysOnTop = true
-                        billboardGui.Size = UDim2.new(scale * 4, 0, scale * 1, 0)
-                        billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-                        billboardGui.MaxDistance = Settings.Max_Distance
-
-                        local textLabel = billboardGui:FindFirstChild("NameLabel") or Instance.new("TextLabel", billboardGui)
-                        textLabel.Name = "NameLabel"
-                        textLabel.BackgroundTransparency = 1
-                        textLabel.Size = UDim2.new(1, 0, 1, 0)
-                        textLabel.Text = player.DisplayName
-                        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        textLabel.TextScaled = true
-                        textLabel.TextStrokeTransparency = 0
-                    end
-                end
-
-            else
-                
-                DestroyESP(character)
             end
-        else
-           
-            DestroyESP(character)
         end
-    end
-end)
+    end)
+    print("ESP Enabled.")
+end
+
