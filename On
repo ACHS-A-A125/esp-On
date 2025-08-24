@@ -22,7 +22,6 @@ local Settings = {
     Chams_Glow_Color = Color3.fromRGB(255, 0, 0),
     Glow_Transparency = 0.3,
     Max_Distance = 300,
-    Min_Size = 0.5,
 }
 
 --// Control Variable
@@ -62,7 +61,7 @@ end
 
 
 -- =================================================================================
---  FUNCTION 2: EnableESP
+--  FUNCTION 2: EnableESP (Corrected)
 --  Starts the ESP loop that draws visuals on players every frame.
 -- =================================================================================
 function EnableESP()
@@ -80,59 +79,75 @@ function EnableESP()
         if not localRoot then return end
 
         for _, player in ipairs(Players:GetPlayers()) do
-            local character = player.Character
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            pcall(function() -- Use a pcall to prevent one player's error from breaking the whole loop
+                local character = player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 
-            -- Validate the target player.
-            if player ~= LocalPlayer and character and humanoid and rootPart and humanoid.Health > 0 then
-                local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
-                if not isTeamCheckActive then
-                    local distance = (localRoot.Position - rootPart.Position).Magnitude
+                -- Validate the target player.
+                if player ~= LocalPlayer and character and humanoid and rootPart and humanoid.Health > 0 then
+                    local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
+                    if not isTeamCheckActive then
+                        local distance = (localRoot.Position - rootPart.Position).Magnitude
 
-                    -- If the player is out of range, just destroy their visuals for now.
-                    if distance > Settings.Max_Distance then
-                        -- You can implement a more specific cleanup here if needed.
-                        -- For now, we'll let the main loop handle it.
-                    else
-                        local scale = math.clamp(1 - (distance / Settings.Max_Distance), Settings.Min_Size, 1)
+                        if distance > Settings.Max_Distance then
+                            -- Cleanup visuals if player is out of range
+                             local head = character:FindFirstChild("Head")
+                             if head then
+                                 local billboardGui = head:FindFirstChild("PlayerESP_GUI")
+                                 if billboardGui then
+                                     billboardGui:Destroy()
+                                 end
+                             end
+                             for _, part in ipairs(character:GetChildren()) do
+                                 if part:IsA("BasePart") then
+                                     local chamsBox = part:FindFirstChild("Chams")
+                                     if chamsBox then chamsBox:Destroy() end
+                                     local glowBox = part:FindFirstChild("Glow")
+                                     if glowBox then glowBox:Destroy() end
+                                 end
+                             end
+                        else
+                            -- Create/Update Chams & Glow
+                            if Settings.Chams_Enabled then
+                                for _, part in ipairs(character:GetChildren()) do
+                                    if part:IsA("BasePart") and part.Transparency < 1 then
+                                        local chamsBox = part:FindFirstChild("Chams") or Instance.new("BoxHandleAdornment", part)
+                                        chamsBox.Name = "Chams"; chamsBox.AlwaysOnTop = true; chamsBox.Adornee = part
+                                        chamsBox.Color3 = Settings.Chams_Color; chamsBox.Transparency = Settings.Chams_Transparency
+                                        chamsBox.Size = (part.Size + Vector3.new(0.02, 0.02, 0.02))
 
-                        -- Create/Update Chams & Glow
-                        if Settings.Chams_Enabled then
-                            for _, part in ipairs(character:GetChildren()) do
-                                if part:IsA("BasePart") and part.Transparency < 1 then
-                                    local chamsBox = part:FindFirstChild("Chams") or Instance.new("BoxHandleAdornment", part)
-                                    chamsBox.Name = "Chams"; chamsBox.AlwaysOnTop = true; chamsBox.Adornee = part
-                                    chamsBox.Color3 = Settings.Chams_Color; chamsBox.Transparency = Settings.Chams_Transparency
-                                    chamsBox.Size = (part.Size + Vector3.new(0.02, 0.02, 0.02)) * scale
-
-                                    local glowBox = part:FindFirstChild("Glow") or Instance.new("BoxHandleAdornment", part)
-                                    glowBox.Name = "Glow"; glowBox.AlwaysOnTop = false; glowBox.Adornee = part
-                                    glowBox.Color3 = Settings.Chams_Glow_Color; glowBox.Transparency = Settings.Glow_Transparency
-                                    glowBox.Size = (part.Size + Vector3.new(0.13, 0.13, 0.13)) * scale
+                                        local glowBox = part:FindFirstChild("Glow") or Instance.new("BoxHandleAdornment", part)
+                                        glowBox.Name = "Glow"; glowBox.AlwaysOnTop = true; glowBox.Adornee = part -- Fix: Set to true
+                                        glowBox.Color3 = Settings.Chams_Glow_Color; glowBox.Transparency = Settings.Glow_Transparency
+                                        glowBox.Size = (part.Size + Vector3.new(0.13, 0.13, 0.13))
+                                    end
                                 end
                             end
-                        end
-                        
-                        -- Create/Update Username ESP
-                        if Settings.Username_Enabled then
-                            local head = character:FindFirstChild("Head")
-                            if head then
-                                local billboardGui = head:FindFirstChild("PlayerESP_GUI") or Instance.new("BillboardGui", head)
-                                billboardGui.Name = "PlayerESP_GUI"; billboardGui.AlwaysOnTop = true
-                                billboardGui.Size = UDim2.new(scale * 4, 0, scale * 1, 0); billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+                            
+                            -- Create/Update Username ESP
+                            if Settings.Username_Enabled then
+                                local head = character:FindFirstChild("Head")
+                                if head then
+                                    local billboardGui = head:FindFirstChild("PlayerESP_GUI") or Instance.new("BillboardGui", head)
+                                    billboardGui.Name = "PlayerESP_GUI"; billboardGui.AlwaysOnTop = true
+                                    billboardGui.Size = UDim2.new(10, 0, 2, 0) -- Fix: Increased base size for readability
+                                    billboardGui.StudsOffset = Vector3.new(0, 2.5, 0)
 
-                                local textLabel = billboardGui:FindFirstChild("NameLabel") or Instance.new("TextLabel", billboardGui)
-                                textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
-                                textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
-                                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
+                                    local textLabel = billboardGui:FindFirstChild("NameLabel") or Instance.new("TextLabel", billboardGui)
+                                    textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
+                                    textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
+                                    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
+                                    
+                                    local textStroke = textLabel:FindFirstChild("TextStroke") or Instance.new("UIStroke", textLabel)
+                                    textStroke.Name = "TextStroke"; textStroke.Thickness = 1.5; textStroke.Color = Color3.new(0,0,0)
+                                end
                             end
                         end
                     end
                 end
-            end
+            end)
         end
     end)
     print("ESP Enabled.")
 end
-
