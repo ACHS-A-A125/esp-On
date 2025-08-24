@@ -1,10 +1,11 @@
 --[[
-    SCRIPT: ESP Functions Library
+    SCRIPT: ESP Functions Library (Highlight Method)
 
     DESCRIPTION:
     This script provides two functions, EnableESP() and DisableESP(),
-    to control the visual ESP elements. It does not activate them on its own.
-    You must call these functions from another script or via a trigger.
+    to control the visual ESP elements. This version uses the modern
+    'Highlight' instance for better performance and reliability.
+    It does not activate on its own; you must call the functions.
 ]]
 
 --// Services
@@ -15,18 +16,18 @@ local LocalPlayer = Players.LocalPlayer
 --// Settings
 local Settings = {
     ESP_TeamCheck = false,
-    Chams_Enabled = true,
     Username_Enabled = true,
-    Chams_Color = Color3.fromRGB(0, 0, 255),
-    Chams_Transparency = 0.9,
-    Chams_Glow_Color = Color3.fromRGB(255, 0, 0),
-    Glow_Transparency = 0.3,
+
+    -- Highlight Settings
+    Fill_Color = Color3.fromRGB(0, 0, 255),  -- The main body color
+    Fill_Transparency = 0.7,                 -- The transparency of the body
+    Outline_Color = Color3.fromRGB(255, 0, 0), -- The color of the glowing outline
+    Outline_Transparency = 0.3,              -- The transparency of the outline
+
     Max_Distance = 300,
 }
 
 --// Control Variable
--- This holds the active connection to the game's heartbeat (frame updates).
--- It allows us to start and stop the ESP loop.
 local heartbeatConnection = nil
 
 -- =================================================================================
@@ -40,20 +41,24 @@ function DisableESP()
         heartbeatConnection = nil
     end
 
-    -- Internal helper function to clean a single character.
-    local function cleanupCharacter(character)
-        if not character then return end
-        -- Use GetDescendants to reliably find all ESP parts.
-        for _, descendant in ipairs(character:GetDescendants()) do
-            if descendant.Name == "Glow" or descendant.Name == "Chams" or descendant.Name == "PlayerESP_GUI" then
-                descendant:Destroy()
+    -- Loop through every player and destroy their ESP elements.
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            -- Find and destroy the Highlight instance.
+            local espHighlight = player.Character:FindFirstChild("ESPHighlight")
+            if espHighlight then
+                espHighlight:Destroy()
+            end
+
+            -- Find and destroy the username GUI.
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                local billboardGui = head:FindFirstChild("PlayerESP_GUI")
+                if billboardGui then
+                    billboardGui:Destroy()
+                end
             end
         end
-    end
-
-    -- Loop through every player in the game and run the cleanup function.
-    for _, player in ipairs(Players:GetPlayers()) do
-        cleanupCharacter(player.Character)
     end
 
     print("ESP Disabled and Cleaned Up.")
@@ -61,7 +66,7 @@ end
 
 
 -- =================================================================================
---  FUNCTION 2: EnableESP (Corrected)
+--  FUNCTION 2: EnableESP (Corrected with Highlight)
 --  Starts the ESP loop that draws visuals on players every frame.
 -- =================================================================================
 function EnableESP()
@@ -81,70 +86,53 @@ function EnableESP()
         for _, player in ipairs(Players:GetPlayers()) do
             pcall(function() -- Use a pcall to prevent one player's error from breaking the whole loop
                 local character = player.Character
-                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                if not character then return end
+                
+                -- Cleanup previous ESP elements on the character to avoid clutter
+                local espHighlight = character:FindFirstChild("ESPHighlight")
+                local head = character:FindFirstChild("Head")
+                local billboardGui = head and head:FindFirstChild("PlayerESP_GUI")
 
-                -- Validate the target player.
-                if player ~= LocalPlayer and character and humanoid and rootPart and humanoid.Health > 0 then
-                    local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
-                    if not isTeamCheckActive then
-                        local distance = (localRoot.Position - rootPart.Position).Magnitude
+                -- Primary validation check
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                local isVisible = (player ~= LocalPlayer and humanoid and rootPart and humanoid.Health > 0)
+                local isTeamCheckActive = Settings.ESP_TeamCheck and player.Team == LocalPlayer.Team
+                local distance = rootPart and (localRoot.Position - rootPart.Position).Magnitude or math.huge
 
-                        if distance > Settings.Max_Distance then
-                            -- Cleanup visuals if player is out of range
-                             local head = character:FindFirstChild("Head")
-                             if head then
-                                 local billboardGui = head:FindFirstChild("PlayerESP_GUI")
-                                 if billboardGui then
-                                     billboardGui:Destroy()
-                                 end
-                             end
-                             for _, part in ipairs(character:GetChildren()) do
-                                 if part:IsA("BasePart") then
-                                     local chamsBox = part:FindFirstChild("Chams")
-                                     if chamsBox then chamsBox:Destroy() end
-                                     local glowBox = part:FindFirstChild("Glow")
-                                     if glowBox then glowBox:Destroy() end
-                                 end
-                             end
-                        else
-                            -- Create/Update Chams & Glow
-                            if Settings.Chams_Enabled then
-                                for _, part in ipairs(character:GetChildren()) do
-                                    if part:IsA("BasePart") and part.Transparency < 1 then
-                                        local chamsBox = part:FindFirstChild("Chams") or Instance.new("BoxHandleAdornment", part)
-                                        chamsBox.Name = "Chams"; chamsBox.AlwaysOnTop = true; chamsBox.Adornee = part
-                                        chamsBox.Color3 = Settings.Chams_Color; chamsBox.Transparency = Settings.Chams_Transparency
-                                        chamsBox.Size = (part.Size + Vector3.new(0.02, 0.02, 0.02))
+                -- Main logic: Should we draw ESP on this player?
+                if isVisible and not isTeamCheckActive and distance <= Settings.Max_Distance then
+                    -- Create/Update Highlight ESP (This shows through walls)
+                    local highlight = espHighlight or Instance.new("Highlight", character)
+                    highlight.Name = "ESPHighlight"
+                    
+                    -- CRITICAL: This property makes the highlight visible through walls.
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    
+                    highlight.FillColor = Settings.Fill_Color
+                    highlight.FillTransparency = Settings.Fill_Transparency
+                    highlight.OutlineColor = Settings.Outline_Color
+                    highlight.OutlineTransparency = Settings.Outline_Transparency
+                    
+                    -- Create/Update Username ESP
+                    if Settings.Username_Enabled and head then
+                        local gui = billboardGui or Instance.new("BillboardGui", head)
+                        gui.Name = "PlayerESP_GUI"; gui.AlwaysOnTop = true
+                        gui.Size = UDim2.new(10, 0, 2, 0)
+                        gui.StudsOffset = Vector3.new(0, 3, 0)
 
-                                        local glowBox = part:FindFirstChild("Glow") or Instance.new("BoxHandleAdornment", part)
-                                        glowBox.Name = "Glow"; glowBox.AlwaysOnTop = true; glowBox.Adornee = part -- Fix: Set to true
-                                        glowBox.Color3 = Settings.Chams_Glow_Color; glowBox.Transparency = Settings.Glow_Transparency
-                                        glowBox.Size = (part.Size + Vector3.new(0.13, 0.13, 0.13))
-                                    end
-                                end
-                            end
-                            
-                            -- Create/Update Username ESP
-                            if Settings.Username_Enabled then
-                                local head = character:FindFirstChild("Head")
-                                if head then
-                                    local billboardGui = head:FindFirstChild("PlayerESP_GUI") or Instance.new("BillboardGui", head)
-                                    billboardGui.Name = "PlayerESP_GUI"; billboardGui.AlwaysOnTop = true
-                                    billboardGui.Size = UDim2.new(10, 0, 2, 0) -- Fix: Increased base size for readability
-                                    billboardGui.StudsOffset = Vector3.new(0, 2.5, 0)
-
-                                    local textLabel = billboardGui:FindFirstChild("NameLabel") or Instance.new("TextLabel", billboardGui)
-                                    textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
-                                    textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
-                                    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
-                                    
-                                    local textStroke = textLabel:FindFirstChild("TextStroke") or Instance.new("UIStroke", textLabel)
-                                    textStroke.Name = "TextStroke"; textStroke.Thickness = 1.5; textStroke.Color = Color3.new(0,0,0)
-                                end
-                            end
-                        end
+                        local textLabel = gui:FindFirstChild("NameLabel") or Instance.new("TextLabel", gui)
+                        textLabel.Name = "NameLabel"; textLabel.BackgroundTransparency = 1
+                        textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.Text = player.DisplayName
+                        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextScaled = true
+                        
+                        local textStroke = textLabel:FindFirstChild("TextStroke") or Instance.new("UIStroke", textLabel)
+                        textStroke.Name = "TextStroke"; textStroke.Thickness = 1.5; textStroke.Color = Color3.new(0,0,0)
                     end
+                else
+                    -- If the player is invalid, out of range, or on our team, destroy their visuals.
+                    if espHighlight then espHighlight:Destroy() end
+                    if billboardGui then billboardGui:Destroy() end
                 end
             end)
         end
